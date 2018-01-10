@@ -33,6 +33,7 @@ import javax.annotation.concurrent.GuardedBy;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Wallet {
     @GuardedBy("accessLock")
@@ -40,6 +41,9 @@ public class Wallet {
 
     @GuardedBy("accessLock")
     private final Map<ByteArrayWrapper, byte[]> accounts = new HashMap<>();
+
+    @GuardedBy("accessLock")
+    private final List<byte[]> initialAccounts = new ArrayList<>();
 
     private final Object accessLock = new Object();
     private final Map<ByteArrayWrapper, Long> unlocksTimeouts = new HashMap<>();
@@ -50,14 +54,20 @@ public class Wallet {
 
     public List<byte[]> getAccountAddresses() {
         List<byte[]> addresses = new ArrayList<>();
+        Set<ByteArrayWrapper> keys = new HashSet<>();
 
         synchronized(accessLock) {
-            for (ByteArrayWrapper address: this.accounts.keySet()) {
-                addresses.add(address.getData());
+            addresses.addAll(this.initialAccounts);
+
+            for (byte[] address: keyDS.keys()) {
+                keys.add(new ByteArrayWrapper(address));
             }
 
-            for (byte[] address: this.keyDS.keys()) {
-                addresses.add(address);
+            keys.addAll(accounts.keySet());
+            keys.removeAll(this.initialAccounts.stream().map(bytes -> new ByteArrayWrapper(bytes)).collect(Collectors.toList()));
+
+            for (ByteArrayWrapper address: keys) {
+                addresses.add(address.getData());
             }
         }
 
@@ -171,7 +181,12 @@ public class Wallet {
 
     public byte[] addAccountWithPrivateKey(byte[] privateKeyBytes) {
         Account account = new Account(ECKey.fromPrivate(privateKeyBytes));
-        return addAccount(account);
+
+        synchronized (accessLock) {
+            byte[] address = addAccount(account);
+            this.initialAccounts.add(address);
+            return address;
+        }
     }
 
     public byte[] addAccountWithPrivateKey(byte[] privateKeyBytes, String passphrase) {
