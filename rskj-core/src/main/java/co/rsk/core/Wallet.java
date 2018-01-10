@@ -50,17 +50,14 @@ public class Wallet {
 
     public List<byte[]> getAccountAddresses() {
         List<byte[]> addresses = new ArrayList<>();
-        Set<ByteArrayWrapper> keys = new HashSet<>();
 
         synchronized(accessLock) {
-            for (byte[] address: keyDS.keys()) {
-                keys.add(new ByteArrayWrapper(address));
+            for (ByteArrayWrapper address: this.accounts.keySet()) {
+                addresses.add(address.getData());
             }
 
-            keys.addAll(accounts.keySet());
-
-            for (ByteArrayWrapper address: keys) {
-                addresses.add(address.getData());
+            for (byte[] address: this.keyDS.keys()) {
+                addresses.add(address);
             }
         }
 
